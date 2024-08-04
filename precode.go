@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -40,11 +40,8 @@ var tasks = map[string]Task{
 	},
 }
 
-// Ниже напишите обработчики для каждого эндпоинта
-
 // Обработчик для получения всех задач
 func getTasks(w http.ResponseWriter, r *http.Request) {
-
 	resp, err := json.Marshal(tasks)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -53,7 +50,9 @@ func getTasks(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
+	if _, err := w.Write(resp); err != nil {
+		log.Printf("Ошибка записи ответа: %v", err)
+	}
 }
 
 // Обработчик для отправки задачи на сервер
@@ -69,10 +68,15 @@ func postTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if _, exists := tasks[task.ID]; exists {
+		http.Error(w, "Задача с таким ID уже существует", http.StatusConflict)
+		return
+	}
+
 	tasks[task.ID] = task
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-
 }
 
 // Обработчик для получения задачи по ID
@@ -90,7 +94,9 @@ func getTaskById(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(resp)
+	if _, err := w.Write(resp); err != nil {
+		log.Printf("Ошибка при записи ответа: %v", err)
+	}
 }
 
 // Обработчик удаления задачи по ID
@@ -103,20 +109,18 @@ func deleteTask(w http.ResponseWriter, r *http.Request) {
 	}
 	delete(tasks, id)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Задача с ID %s удалена", id)))
 }
 
 func main() {
 	r := chi.NewRouter()
 
-	// здесь регистрируйте ваши обработчики
+	// регистрация обработчиков
 	r.Get("/tasks", getTasks)
 	r.Post("/tasks", postTask)
 	r.Get("/task/{id}", getTaskById)
 	r.Delete("/task/{id}", deleteTask)
 
 	if err := http.ListenAndServe(":8080", r); err != nil {
-		fmt.Printf("Ошибка при запуске сервера: %s", err.Error())
-		return
+		log.Fatalf("Ошибка при запуске сервера: %v", err)
 	}
 }
